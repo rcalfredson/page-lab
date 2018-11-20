@@ -21,7 +21,7 @@ class TestUrlFilters(TestCase):
         superuser.save()
 
         urls = [
-            'https://ibm.com/foo',
+            'https://ibm.com/foo/bar',
             'https://ibm.com/bar/baz/biff',
             'https://ibm.com/bar/baz/#w00t',
         ]
@@ -51,11 +51,20 @@ class TestUrlFilters(TestCase):
 
         for filter in filters:
             if filter == 'foo':
+                # Passes and returns https://ibm.com/foo/bar if either one of these
+                # parts are used, but not if both are used together
                 UrlFilterPart.objects.create(
                     prop='path_segment',
                     filter_val=filter,
+                    filter_path_index=0,
                     url_filter=filter_arr[0]
                 )
+                #UrlFilterPart.objects.create(
+                #    prop='path_segment',
+                #    filter_val='bar',
+                #    filter_path_index=1,
+                #    url_filter=filter_arr[0]
+                #)
             elif filter == 'bar':
                 UrlFilterPart.objects.create(
                     prop='path_segment',
@@ -76,12 +85,12 @@ class TestUrlFilters(TestCase):
         # import ipdb; ipdb.set_trace()
         urls = foo.run_query()
 
-        self.assertEqual(urls[0].url, 'https://ibm.com/foo')
+        self.assertEqual(urls[0].url, 'https://ibm.com/foo/bar')
 
         bar = UrlFilter.objects.get(name='bar filter')
         urls = bar.run_query()
 
-        self.assertEqual(urls[0].url, 'https://ibm.com/bar/baz/biff')
+        self.assertEqual(urls[0].url, 'https://ibm.com/bar/baz/#w00t')
 
         woot = UrlFilter.objects.get(name='w00t filter')
         urls = woot.run_query()
