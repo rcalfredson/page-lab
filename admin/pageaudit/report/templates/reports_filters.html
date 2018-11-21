@@ -21,7 +21,8 @@
         background-color: rgb(180, 211, 173);
         border-radius: 6px;
         display: inline-block;
-        margin-right: 20px;
+        margin-left: 3px;
+        margin-right: 3px;
         padding: 2px 4px 3px 4px;
       }
       .filter-item {
@@ -62,6 +63,9 @@
                     <div id="{{ filter.slug }}" class="filter-details">
                         {% for part in parts %}
                             <p class="filter-details-text">{{ part.prop|title }}: {{ part.filter_val }}</p>
+                            {% if forloop.last == False %}
+                              <span>{{ filter.mode|lower }}</span>
+                            {% endif %}
                         {% endfor %}
                     </div>
                     <div class="link-list">
