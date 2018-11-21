@@ -36,13 +36,13 @@ def createFilterParts(filters, filter_arr):
                 prop='path_segment',
                 filter_val='baz',
                 filter_path_index=1,
-                url_filter=filter_arr[1],
+                url_filter=filter_arr[2],
             )
         elif filter == 'w00t':
             UrlFilterPart.objects.create(
                 prop='hash',
                 filter_val='w00t',
-                url_filter=filter_arr[2]
+                url_filter=filter_arr[3]
             )
 
 def createUrlObjects(superuser):
@@ -66,14 +66,21 @@ class TestUrlFilterSets(TestCase):
         createUrlObjects(superuser)
 
 
-        filter_set_arr = [UrlFilterSet.objects.create(
-            name='foo filter or bar filter',
-            description='should return the union of the query results for each',
-            mode='OR'
-        )]
+        filter_set_arr = [
+            UrlFilterSet.objects.create(
+                name='foo filter or baz filter',
+                description='should return the union of the query results for each',
+                mode='OR'
+            ),
+            UrlFilterSet.objects.create(
+                name='w00t filter and bar filter',
+                description='should return the intersection of the query results for each',
+                mode='AND'
+            )
+        ]
 
         # make 3 UrlFilters
-        filters = ['foo', 'baz', 'w00t']
+        filters = ['foo', 'bar', 'baz', 'w00t']
         filter_arr = []
         for filter in filters:
             filter_arr.append(
@@ -81,16 +88,19 @@ class TestUrlFilterSets(TestCase):
                     name='%s filter' % filter,
                     description='%s filter description' % filter,
                     mode='AND',
-                    url_filter_set=filter_set_arr[0] if filter in ['foo', 'baz'] else None
+                    url_filter_set=filter_set_arr[0] if filter in ['foo', 'baz'] else filter_set_arr[1]
                 )
             )
         createFilterParts(filters, filter_arr)
 
     def test_UrlFilterSets(self):
-        foo = UrlFilterSet.objects.get(name='foo filter or bar filter')
+        foo = UrlFilterSet.objects.get(name='foo filter or baz filter')
         urls = foo.run_query()
-
         self.assertEqual(list(map(lambda x: x.url, urls)), ['https://ibm.com/foo', 'https://ibm.com/bar/baz/biff'])
+        bar = UrlFilterSet.objects.get(name='w00t filter and bar filter')
+        urls = bar.run_query()
+        self.assertEqual(list(map(lambda x: x.url, urls)), ['https://ibm.com/bar/#w00t'])
+
 
 class TestUrlFilters(TestCase):
     def setUp(self):
@@ -101,7 +111,7 @@ class TestUrlFilters(TestCase):
         createUrlObjects(superuser)
 
         # make 3 UrlFilters
-        filters = ['foo', 'baz', 'w00t']
+        filters = ['foo', 'bar', 'baz', 'w00t']
         filter_arr = []
 
         for filter in filters:
