@@ -218,7 +218,7 @@ class Url(models.Model):
 
         defSortby = "date"
         defSortorder = "-"
-        defFilter = None
+        defUrlIds = []
 
         ## Sort by.
         try:
@@ -239,10 +239,18 @@ class Url(models.Model):
         except Exception as ex:
             userSortorder = defSortorder
 
+        try:
+            urlIds = options['ids']
+        except Exception as ex:
+            urlIds = defUrlIds
+
         ## Map sortorder field to proper query filter condition.
         querySortorder = "" if userSortorder == "asc" else defSortorder
 
-        return Url.objects.withValidRuns().prefetch_related("lighthouse_run").prefetch_related("url_kpi_average").order_by(querySortorder + querySortby)
+        urls = Url.objects.withValidRuns().prefetch_related("lighthouse_run").prefetch_related("url_kpi_average").order_by(querySortorder + querySortby)
+        if len(urlIds) > 0:
+            urls = urls.filter(id__in=urlIds)
+        return urls
 
     def getKpiAverages(self):
         try:
@@ -400,6 +408,11 @@ class UrlKpiAverage(models.Model):
     def __str__(self):
         return '%s' % (self.url.url,)
 
+    def getFilteredAverages(urls):
+        try:
+          return UrlKpiAverage.objects.filter(url_id__in=list(urls.values_list('id', flat=True)))
+        except Exception as ex:
+          return UrlKpiAverage.objects.all()
 
 ## FUTURE USE:
 # class LighthouseConfig(models.Model):
@@ -785,6 +798,49 @@ class UrlFilterPart(models.Model):
     def __str__(self):
         return "%s: %s => %s" % (self.prop, self.filter_key or None, self.filter_val,)
 
+FILTER_MODES = (
+    ('AND', 'AND',),
+    ('OR', 'OR',),
+)
+
+class UrlFilterSet(models.Model):
+    """
+    A set of one of more UrlFilters, each of which are linked by AND or OR.
+    Allows for retrieval based on more sophisticated queries.
+    """
+    created_date = models.DateTimeField(auto_now_add=True, editable=False)
+    modified_date = models.DateTimeField(auto_now=True, editable=False)
+    name = models.CharField(max_length=255, unique=True)
+    description = models.TextField(null=True, blank=True)
+    slug = models.SlugField(max_length=50)
+    mode = models.CharField(max_length=16, choices=FILTER_MODES)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return "%s" % (self.name)
+
+    def get_filter_set_safe(filter_slug):
+        try:
+            return UrlFilterSet.objects.get(slug=filter_slug)
+        except UrlFilterSet.DoesNotExist:
+            return None
+
+    def run_query(self):
+        """
+        get results from each of the individual filters, combine them,
+        and remove the duplicates.
+        """
+        filters = UrlFilter.objects.filter(url_filter_set=self)
+        results = []
+        for url_filter in filters:
+          single_result = url_filter.run_query()
+          if self.mode == 'AND':
+            results.append(single_result)
+          else:
+            results.extend(single_result)
+        return set(results[0]).intersection(*results[1:]) if self.mode == 'AND' else list(set(results))
 
 class UrlFilter(models.Model):
     """
@@ -794,12 +850,23 @@ class UrlFilter(models.Model):
     modified_date = models.DateTimeField(auto_now=True, editable=False)
     name = models.CharField(max_length=255, unique=True)
     description = models.TextField(null=True, blank=True)
+    slug = models.SlugField(max_length=50)
+    mode = models.CharField(max_length=16, choices=FILTER_MODES)
+    url_filter_set = models.ForeignKey('UrlFilterSet',
+                                        related_name='url_filter_url_filter_set',
+                                        on_delete=models.CASCADE, null=True, blank=True)
 
     class Meta:
         ordering = ['name']
 
     def __str__(self):
         return "%s" % (self.name)
+
+    def get_filter_safe(filter_slug):
+        try:
+            return UrlFilter.objects.get(slug=filter_slug)
+        except UrlFilter.DoesNotExist:
+            return None
 
     def run_query(self):
         """
@@ -808,10 +875,11 @@ class UrlFilter(models.Model):
         """
         filter_parts = UrlFilterPart.objects.filter(url_filter=self)
 
+        filter_map = {'OR': Q.OR, 'AND': Q.AND}
         and_condition = Q()
         for part in filter_parts:
             query_obj = self.make_query_object(part)
-            and_condition.add(Q(**query_obj), Q.AND)
+            and_condition.add(Q(**query_obj), filter_map[self.mode])
 
         query_set = Url.objects.filter(and_condition).distinct()
 

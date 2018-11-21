@@ -78,6 +78,7 @@
 {% block content %}
 
 	<div class="{{ templateHelpers.classes.grid }} mt4">
+        {% include "switch_filter_view.html" with filter=filter view_name='dashboard' %}
         <form id="pl-sortform" aria-label="Sort data listing" action="" method="get">
             <div class="mb3 dib mr2">
                 <p class="b mt0">Sort:</p>
@@ -106,9 +107,9 @@
                     <option value="seoscore" {% if viewdata == 'seoscore' %}selected="selected"{% endif %}>SEO score</option>
                 </select>
             </div>
-                    
+            {% include "url_filter_select.html" with filter=filter filters=filters view_name='browse' %}
             <div class="mb3 dib mr3">
-                <button type="submit" class="{{ templateHelpers.classes.smallButton }} {{ templateHelpers.classes.bluePriButton }} relative" style="top:2px;">Apply</button>
+                <button id="apply" type="submit" class="{{ templateHelpers.classes.smallButton }} {{ templateHelpers.classes.bluePriButton }} relative" style="top:2px;">Apply</button>
             </div>
                
         </form>
